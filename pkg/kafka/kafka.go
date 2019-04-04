@@ -37,6 +37,7 @@ type ProducerController struct {
 	Version 		sarama.KafkaVersion
 	Brokers 		string
 	Topics 			string
+	start 			time.Time
 }
 
 func (k *ProducerController)Close() {
@@ -70,14 +71,15 @@ func (k *ProducerController)getSendTopic() string {
 	return strings.Split(k.Topics, ",")[0]
 }
 
-func (k *ProducerController)sendOneReq(req SamplesRequest) {
+func (k *ProducerController)sendOneReq(req SamplesRequest) uint64 {
 	start := time.Now()
 	sendTopic := k.getSendTopic()
 
 	b, err := json.Marshal(req)
+
 	if err != nil {
 		glog.Errorf("marshal request %v failed: %v", req, err)
-		return
+		return uint64(len(b))
 	}
 	message := &sarama.ProducerMessage{
 		Topic:sendTopic,
@@ -86,6 +88,8 @@ func (k *ProducerController)sendOneReq(req SamplesRequest) {
 	k.ProducerClient.Input() <- message
 
 	glog.V(5).Infof("send write request to kafka spend %v", time.Since(start))
+
+	return uint64(len(b))
 }
 
 func (k *ProducerController)BatchSend(samples model.Samples) {
@@ -101,11 +105,14 @@ func (k *ProducerController)BatchSend(samples model.Samples) {
 		})
 	}
 
+	var sendBytes uint64
 	for _, req := range reqs {
-		k.sendOneReq(req)
+		send := k.sendOneReq(req)
+		sendBytes += send
 	}
 
-	glog.V(3).Infof("send %d samples to kafka %s - %s", len(samples), k.Brokers, k.getSendTopic())
+	glog.V(3).Infof("send %d(%.2f KB) samples to kafka %s - %s",
+		len(samples), float64(sendBytes)/1024, k.Brokers, k.getSendTopic())
 }
 
 var MyController *ProducerController
@@ -129,6 +136,7 @@ func NewProducerController(brokers, topics, version string) (*ProducerController
 		Brokers:brokers,
 		ProducerClient:ProducerClient,
 		Topics:topics,
+		start:time.Now(),
 	}
 
 	return MyController, nil

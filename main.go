@@ -8,6 +8,7 @@ import (
 	"github.com/sak0/prometheus-to-kafka/pkg/kafka"
 	"os/signal"
 	"os"
+	"github.com/prometheus/log"
 )
 
 var (
@@ -45,5 +46,5 @@ func main() {
 	r := gin.New()
 
 	r.POST("/api/v1/prom/remote/write", controller.WriteToKafka)
-	r.Run("0.0.0.0:8080")
+	log.Fatal(r.Run("0.0.0.0:38080"))
 }
